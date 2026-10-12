@@ -14,36 +14,41 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: setup-node@v4
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
       - name: Setup Java JDK
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Initialize Capacitor Android Environment
+      - name: Initialize Mobile Capacitor App
         run: |
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
           npx cap init "Zuma Mobile" "com.zuma.mobile" --web-dir "."
           npx cap add android
 
-      - name: Sync Web Assets to Android Project
+      - name: Sync Game Files to Android
         run: |
           npx cap sync android
 
-      - name: Build Debug APK
+      - name: Grant Execute Permission to Gradle
         run: |
           cd android
-          ./gradlew assembleDebug
+          chmod +x ./gradlew
 
-      - name: Upload APK Artifact
+      - name: Build Android APK
+        run: |
+          cd android
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK File
         uses: actions/upload-artifact@v4
         with:
           name: Zuma-Mobile-Game-APK
