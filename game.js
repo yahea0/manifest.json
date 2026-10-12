@@ -1,13 +1,20 @@
 /**
- * Zuma: Mobile Game Engine with External Assets & Fallbacks
- * محرك اللعبة مع دعم تحميل وتشغيل الأصول الخارجية (صور، أشكال، سبريت، وأصوات)
+ * Zuma Deluxe Mobile Engine
+ * يحتوي على محاكي أصوات وموسيقى مايانية بالكامل (Web Audio API Native Synthesis)
+ * ومولد جرافيك ثلاثي الأبعاد إجرائي (3D Rolling Orbs, Animated Frog, Mayan Skull, Coins & Particles)
  */
 
-// تهيئة نظام الأصوات الاحتياطي (Procedural Synthesizer) في حال عدم توفر ملفات MP3
-class FallbackAudioEngine {
+// ==========================================================
+// 1. نظام الصوت والموسيقى القبلية المدمج كلياً (Web Audio Engine)
+// ==========================================================
+class ZumaTribalAudioSystem {
   constructor() {
     this.ctx = null;
+    this.isMuted = false;
+    this.bgmTimer = null;
+    this.bgmStep = 0;
   }
+
   init() {
     if (!this.ctx) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -17,159 +24,328 @@ class FallbackAudioEngine {
       this.ctx.resume();
     }
   }
-  shoot() {
-    if (!this.ctx) return;
+
+  toggleMute() {
+    this.isMuted = !this.isMuted;
+    return this.isMuted;
+  }
+
+  // صوت نفث الضفدع للكرة (Pneumatic Spit / Thud)
+  playShoot() {
+    if (this.isMuted || !this.ctx) return;
     const now = this.ctx.currentTime;
+    
+    // تذبذب النقر
     const osc = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
+    const gain = this.ctx.createGain();
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(450, now);
-    osc.frequency.exponentialRampToValueAtTime(100, now + 0.12);
-    g.gain.setValueAtTime(0.3, now);
-    g.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
-    osc.connect(g);
-    g.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.13);
-  }
-  match(combo = 1) {
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const freqs = [330, 392, 493.88, 587.33, 659.25, 783.99];
-    const f = freqs[Math.min(combo - 1, freqs.length - 1)];
-    const osc = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(f, now);
-    g.gain.setValueAtTime(0.3, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-    osc.connect(g);
-    g.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.31);
-  }
-  insert() {
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(200, now);
-    osc.frequency.setValueAtTime(100, now + 0.04);
-    g.gain.setValueAtTime(0.2, now);
-    g.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-    osc.connect(g);
-    g.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.06);
-  }
-  snap() {
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(160, now);
-    osc.frequency.exponentialRampToValueAtTime(400, now + 0.14);
-    g.gain.setValueAtTime(0.2, now);
-    g.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
-    osc.connect(g);
-    g.connect(this.ctx.destination);
+    osc.frequency.setValueAtTime(420, now);
+    osc.frequency.exponentialRampToValueAtTime(70, now + 0.14);
+    
+    gain.gain.setValueAtTime(0.4, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+    
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
     osc.start(now);
     osc.stop(now + 0.15);
   }
-  victory() {
-    if (!this.ctx) return;
-    [400, 500, 600, 800].forEach((freq, idx) => {
-      const now = this.ctx.currentTime + idx * 0.1;
+
+  // صوت الارتطام الخزفي بين الكرات (Marble Clack)
+  playClack() {
+    if (this.isMuted || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    const baseFreq = 800 + Math.random() * 200;
+    osc.frequency.setValueAtTime(baseFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(150, now + 0.04);
+
+    gain.gain.setValueAtTime(0.25, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.04);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.05);
+  }
+
+  // صوت تفجير الكرات المتطابقة والمجموعات المتتالية (Chime Chord)
+  playComboChime(combo = 1) {
+    if (this.isMuted || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    // سلم ماياني نغمي خماسي
+    const scale = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.5];
+    const root = scale[Math.min(combo - 1, scale.length - 1)];
+
+    [root, root * 1.5, root * 2].forEach((freq, idx) => {
       const osc = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-      osc.frequency.setValueAtTime(freq, now);
-      g.gain.setValueAtTime(0.25, now);
-      g.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-      osc.connect(g);
-      g.connect(this.ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.21);
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.03);
+
+      gain.gain.setValueAtTime(0.3 / (idx + 1), now + idx * 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now + idx * 0.03);
+      osc.stop(now + 0.45);
     });
   }
-  gameover() {
-    if (!this.ctx) return;
-    [350, 280, 210, 140].forEach((freq, idx) => {
-      const now = this.ctx.currentTime + idx * 0.12;
+
+  // صوت السحب والانجذاب المغناطيسي العكسي (Reverse Suction Whoosh)
+  playSnapReverse() {
+    if (this.isMuted || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(120, now);
+    osc.frequency.exponentialRampToValueAtTime(450, now + 0.16);
+
+    gain.gain.setValueAtTime(0.25, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.16);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.17);
+  }
+
+  // صوت صيد العملة الذهبية (Gold Coin Shimmer)
+  playCoinPickup() {
+    if (this.isMuted || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    [987.77, 1318.51].forEach((freq, i) => {
       const osc = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + i * 0.08);
+
+      gain.gain.setValueAtTime(0.3, now + i * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.25);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now + i * 0.08);
+      osc.stop(now + i * 0.08 + 0.26);
+    });
+  }
+
+  // صوت انفجار القنبلة الخارقة (Bomb Explosion)
+  playBombBoom() {
+    if (this.isMuted || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(160, now);
+    osc.frequency.exponentialRampToValueAtTime(30, now + 0.4);
+
+    gain.gain.setValueAtTime(0.5, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.42);
+  }
+
+  // صوت نبضات الخطر عند اقتراب الكرات من الجمجمة
+  playDangerPulse() {
+    if (this.isMuted || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(80, now);
+    osc.frequency.exponentialRampToValueAtTime(40, now + 0.12);
+
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.13);
+  }
+
+  // موسيقى الطبول القبلية في الخلفية (Ambient Tribal Drum Beat)
+  startTribalBGM() {
+    if (this.bgmTimer) return;
+    this.bgmTimer = setInterval(() => {
+      if (this.isMuted || !this.ctx) return;
+      const now = this.ctx.currentTime;
+      this.bgmStep = (this.bgmStep + 1) % 8;
+
+      // نبضة الطبلة الكبيرة (Low Tribal Tom)
+      if (this.bgmStep === 0 || this.bgmStep === 4) {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.frequency.setValueAtTime(95, now);
+        osc.frequency.exponentialRampToValueAtTime(45, now + 0.18);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.19);
+      }
+
+      // صوت الخشخيشة المايانية (Shaker/Woodblock)
+      if (this.bgmStep % 2 === 1) {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(this.bgmStep === 3 ? 550 : 380, now);
+        gain.gain.setValueAtTime(0.05, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.07);
+      }
+    }, 280);
+  }
+
+  stopTribalBGM() {
+    if (this.bgmTimer) {
+      clearInterval(this.bgmTimer);
+      this.bgmTimer = null;
+    }
+  }
+
+  // نغمة الفوز الأسطورية (Fanfare)
+  playVictory() {
+    if (this.isMuted || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const notes = [392, 523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((f, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(f, now + i * 0.12);
+      gain.gain.setValueAtTime(0.3, now + i * 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.12 + 0.28);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now + i * 0.12);
+      osc.stop(now + i * 0.12 + 0.29);
+    });
+  }
+
+  // نغمة الخسارة
+  playDefeat() {
+    if (this.isMuted || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const notes = [350, 290, 220, 160];
+    notes.forEach((f, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
       osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(freq, now);
-      g.gain.setValueAtTime(0.2, now);
-      g.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-      osc.connect(g);
-      g.connect(this.ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.21);
+      osc.frequency.setValueAtTime(f, now + i * 0.16);
+      gain.gain.setValueAtTime(0.25, now + i * 0.16);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.16 + 0.28);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now + i * 0.16);
+      osc.stop(now + i * 0.16 + 0.29);
     });
   }
 }
 
-// ألوان ونماذج الكرات
-const MARBLE_PALETTE = [
-  { id: 0, key: 'ruby',     c1: '#ff2a55', c2: '#80001a', hi: '#ff99aa', symbol: '✦' },
-  { id: 1, key: 'sapphire', c1: '#00a6ff', c2: '#003366', hi: '#99ddff', symbol: '▲' },
-  { id: 2, key: 'emerald',  c1: '#00e676', c2: '#004d26', hi: '#b3ffd9', symbol: '◆' },
-  { id: 3, key: 'amber',    c1: '#ffb300', c2: '#804d00', hi: '#ffe699', symbol: '●' },
-  { id: 4, key: 'amethyst', c1: '#ba55d3', c2: '#4a0e66', hi: '#f2ccff', symbol: '★' }
+// ==========================================================
+// 2. إعدادات كرات زوما وقواها الخارقة (Original Marble Palettes)
+// ==========================================================
+const ORB_TYPES = [
+  { id: 0, name: 'ruby',     cTop: '#ff8a80', cMid: '#d50000', cDark: '#8b0000', glyph: '✹' },
+  { id: 1, name: 'amber',    cTop: '#fff59d', cMid: '#ffab00', cDark: '#c67c00', glyph: '★' },
+  { id: 2, name: 'emerald',  cTop: '#b9f6ca', cMid: '#00c853', cDark: '#00600f', glyph: '◆' },
+  { id: 3, name: 'sapphire', cTop: '#80d8ff', cMid: '#0091ea', cDark: '#01579b', glyph: '▲' },
+  { id: 4, name: 'amethyst', cTop: '#ea80fc', cMid: '#aa00ff', cDark: '#4a148c', glyph: '●' }
 ];
 
-const MARBLE_RADIUS = 16;
-const MARBLE_DIAMETER = MARBLE_RADIUS * 2;
+const POWER_TYPES = {
+  NORMAL: 0,
+  BOMB: 1,      // قنبلة تنفجر في دائرة محيطة
+  BACKWARD: 2,  // ترجع السلسلة بأكملها إلى الخلف
+  SLOWDOWN: 3   // تبطئ حركة السلسلة لمدة 5 ثوانٍ
+};
 
-class ZumaMobileGame {
+const ORB_RADIUS = 16;
+const ORB_DIAMETER = ORB_RADIUS * 2;
+
+// ==========================================================
+// 3. محرك لعبة زوما الرئيسي (Core Engine)
+// ==========================================================
+class ZumaMasterApp {
   constructor() {
-    this.canvas = document.getElementById('gameCanvas');
+    this.canvas = document.getElementById('zumaCanvas');
     this.ctx = this.canvas.getContext('2d');
-    this.assetManager = new AssetManager(GAME_ASSETS_CONFIG);
-    this.fallbackAudio = new FallbackAudioEngine();
+    this.audio = new ZumaTribalAudioSystem();
 
+    // حالات اللعبة
     this.score = 0;
     this.level = 1;
     this.lives = 3;
     this.isPlaying = false;
     this.isPaused = false;
+    this.slowdownTimer = 0;
+    this.dangerBeepTimer = 0;
+    this.screenShake = 0;
 
+    // أبعاد الشاشة المتكيفة
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.width = window.innerWidth;
     this.height = window.innerHeight;
 
+    // المسار والجمجمة
     this.path = [];
     this.pathLength = 0;
-    this.skullPos = { x: 0, y: 0 };
-    this.skullAngle = 0;
+    this.skull = { x: 0, y: 0, angle: 0, mouthOpen: 0, isGlowing: false };
 
+    // سلسلة الكرات
     this.chain = [];
     this.marblesSpawned = 0;
     this.totalMarbles = 40;
-    this.speed = 1.0;
+    this.baseSpeed = 1.0;
 
+    // الضفدع الرامي
     this.frog = {
       x: this.width / 2,
       y: this.height / 2,
       angle: 0,
-      currentMarble: 0,
-      nextMarble: 1,
-      radius: 42,
-      recoil: 0
+      currentOrb: 0,
+      currentPower: POWER_TYPES.NORMAL,
+      nextOrb: 1,
+      nextPower: POWER_TYPES.NORMAL,
+      radius: 44,
+      recoil: 0,
+      tongueOut: 0
     };
 
+    // العملة الذهبية المايانية
+    this.coin = { x: 0, y: 0, active: false, timer: 0, rot: 0 };
+
+    // المقذوفات والجسيمات ومؤشر التصويب
     this.bullets = [];
     this.particles = [];
-    this.floatingTexts = [];
+    this.popups = [];
+    this.isAiming = false;
 
-    this.initCanvas();
-    this.bindEvents();
-    this.preloadAssets();
+    this.resizeCanvas();
+    this.bindDOMEvents();
+    this.buildLevelTrack(this.level);
+    this.startAppLoop();
   }
 
-  initCanvas() {
+  resizeCanvas() {
     this.width = window.innerWidth;
     this.height = window.innerHeight;
     this.canvas.width = this.width * this.dpr;
@@ -181,73 +357,62 @@ class ZumaMobileGame {
     this.frog.y = this.height / 2;
   }
 
-  async preloadAssets() {
-    const bar = document.getElementById('loader-bar-fill');
-    const screen = document.getElementById('asset-loader-screen');
-    await this.assetManager.loadAll((percent) => {
-      bar.style.width = `${percent}%`;
-    });
-    setTimeout(() => {
-      screen.classList.add('fade-out');
-      this.generateLevelPath(this.level);
-      this.startLoop();
-    }, 400);
-  }
-
-  generateLevelPath(lvl) {
+  // بناء المسارات الحلزونية والمتعرجة الأسطورية
+  buildLevelTrack(lvl) {
     const cx = this.width / 2;
     const cy = this.height / 2;
     const raw = [];
     const minDim = Math.min(this.width, this.height);
 
     if (lvl === 1) {
-      // مسار حلزوني
+      // المرحلة الأولى: حلزون المعبد الكلاسيكي
+      const steps = 420;
       const turns = 2.4;
-      const steps = 400;
-      const maxR = minDim * 0.45;
+      const maxR = minDim * 0.44;
       const minR = minDim * 0.16;
       for (let i = 0; i <= steps; i++) {
         const t = i / steps;
         const angle = t * turns * Math.PI * 2;
         const r = maxR - t * (maxR - minR);
-        raw.push({ x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r * 0.88 });
+        raw.push({ x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r * 0.86 });
       }
     } else if (lvl === 2) {
-      // مسار ثعباني S-Curve
-      const steps = 450;
+      // المرحلة الثانية: مسار الأفعى المزدوج المتموج
+      const steps = 460;
       for (let i = 0; i <= steps; i++) {
         const t = i / steps;
         const angle = t * Math.PI * 3.6;
-        const r = (1 - t) * (minDim * 0.44) + minDim * 0.13;
-        raw.push({ x: cx + Math.cos(angle) * r + Math.sin(t * 8) * 25, y: cy + Math.sin(angle) * r * 0.9 });
+        const r = (1 - t) * (minDim * 0.43) + minDim * 0.13;
+        const wobble = Math.sin(t * Math.PI * 6) * 35;
+        raw.push({ x: cx + Math.cos(angle) * r + wobble, y: cy + Math.sin(angle) * r * 0.9 });
       }
     } else {
-      // مسار عين الإعصار
-      const steps = 500;
+      // المرحلة الثالثة وما بعد: دوامة شمس المايا
+      const steps = 520;
       for (let i = 0; i <= steps; i++) {
         const t = i / steps;
-        const angle = t * Math.PI * 4.3;
-        const r = (1 - Math.pow(t, 0.95)) * (minDim * 0.46) + minDim * 0.12;
-        raw.push({ x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r * 0.82 });
+        const angle = t * Math.PI * 4.4;
+        const r = (1 - Math.pow(t, 0.9)) * (minDim * 0.45) + minDim * 0.12;
+        raw.push({ x: cx + Math.cos(angle) * r * 1.05, y: cy + Math.sin(angle) * r * 0.82 });
       }
     }
 
-    // تقسيم المسار إلى نقاط ذات أبعاد متساوية (Equidistant sampling)
+    // إعادة المعايرة بنقاط متساوية بمسافة 2 بكسل لحركة شديدة النعومة (Ultra-smooth 120Hz)
     this.path = [];
-    let accDist = 0;
+    let accumulated = 0;
     const segs = [];
     for (let i = 0; i < raw.length - 1; i++) {
       const p1 = raw[i];
       const p2 = raw[i + 1];
       const d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-      segs.push({ p1, p2, dist: d, startD: accDist });
-      accDist += d;
+      segs.push({ p1, p2, dist: d, start: accumulated });
+      accumulated += d;
     }
-    this.pathLength = accDist;
+    this.pathLength = accumulated;
 
     for (let d = 0; d <= this.pathLength; d += 2.0) {
-      const seg = segs.find(s => d >= s.startD && d <= s.startD + s.dist) || segs[segs.length - 1];
-      const t = (d - seg.startD) / (seg.dist || 1);
+      const seg = segs.find(s => d >= s.start && d <= s.start + s.dist) || segs[segs.length - 1];
+      const t = (d - seg.start) / (seg.dist || 1);
       const x = seg.p1.x + (seg.p2.x - seg.p1.x) * t;
       const y = seg.p1.y + (seg.p2.y - seg.p1.y) * t;
       const angle = Math.atan2(seg.p2.y - seg.p1.y, seg.p2.x - seg.p1.x);
@@ -255,11 +420,12 @@ class ZumaMobileGame {
     }
 
     const endPoint = this.path[this.path.length - 1];
-    this.skullPos = { x: endPoint.x, y: endPoint.y };
-    this.skullAngle = endPoint.angle;
+    this.skull.x = endPoint.x;
+    this.skull.y = endPoint.y;
+    this.skull.angle = endPoint.angle;
   }
 
-  getPoint(d) {
+  getPathPoint(d) {
     if (this.path.length === 0) return { x: 0, y: 0, angle: 0 };
     const clamped = Math.max(0, Math.min(d, this.pathLength));
     const idx = Math.min(Math.floor(clamped / 2.0), this.path.length - 1);
@@ -268,231 +434,325 @@ class ZumaMobileGame {
 
   startLevel(lvl = 1) {
     this.level = lvl;
-    this.generateLevelPath(this.level);
+    this.buildLevelTrack(this.level);
     this.chain = [];
     this.bullets = [];
     this.particles = [];
-    this.floatingTexts = [];
+    this.popups = [];
     this.marblesSpawned = 0;
-    this.totalMarbles = 35 + lvl * 10;
-    this.speed = 0.9 + lvl * 0.2;
+    this.totalMarbles = 36 + lvl * 12;
+    this.baseSpeed = 0.95 + lvl * 0.22;
+    this.slowdownTimer = 0;
     this.isPlaying = true;
     this.isPaused = false;
 
-    const maxColors = Math.min(2 + lvl, MARBLE_PALETTE.length);
-    this.frog.currentMarble = Math.floor(Math.random() * maxColors);
-    this.frog.nextMarble = Math.floor(Math.random() * maxColors);
+    // تجهيز كرات الضفدع الأولية
+    const colors = Math.min(3 + lvl, ORB_TYPES.length);
+    this.frog.currentOrb = Math.floor(Math.random() * colors);
+    this.frog.currentPower = POWER_TYPES.NORMAL;
+    this.frog.nextOrb = Math.floor(Math.random() * colors);
+    this.frog.nextPower = this.rollPowerup();
 
-    this.assetManager.playBGM();
+    this.spawnRandomCoin();
+    this.audio.startTribalBGM();
     this.updateHUD();
-    this.hideModals();
+    this.hideAllModals();
   }
 
-  bindEvents() {
+  rollPowerup() {
+    // احتمالية 15% للحصول على كرة خارقة (قنبلة، إرجاع، إبطاء)
+    if (Math.random() < 0.16) {
+      const powers = [POWER_TYPES.BOMB, POWER_TYPES.BACKWARD, POWER_TYPES.SLOWDOWN];
+      return powers[Math.floor(Math.random() * powers.length)];
+    }
+    return POWER_TYPES.NORMAL;
+  }
+
+  spawnRandomCoin() {
+    // وضع العملة في زاوية بعيدة على أطراف المسار
+    const offsetAngle = Math.random() * Math.PI * 2;
+    const offsetDist = Math.min(this.width, this.height) * 0.38;
+    this.coin.x = this.frog.x + Math.cos(offsetAngle) * offsetDist;
+    this.coin.y = this.frog.y + Math.sin(offsetAngle) * offsetDist;
+    this.coin.active = true;
+    this.coin.timer = 500; // مدة بقائها
+  }
+
+  bindDOMEvents() {
     window.addEventListener('resize', () => {
-      this.initCanvas();
-      this.generateLevelPath(this.level);
+      this.resizeCanvas();
+      this.buildLevelTrack(this.level);
     });
 
-    const triggerAim = (cx, cy, shoot = false) => {
+    const triggerAim = (clientX, clientY, shoot = false) => {
       if (!this.isPlaying || this.isPaused) return;
-      this.frog.angle = Math.atan2(cy - this.frog.y, cx - this.frog.x);
-      if (shoot) this.shoot();
+      this.frog.angle = Math.atan2(clientY - this.frog.y, clientX - this.frog.x);
+      if (shoot) this.fireOrb();
     };
 
-    // دعم أحداث اللمس والماوس
+    // دعم الماوس
     this.canvas.addEventListener('mousemove', (e) => triggerAim(e.clientX, e.clientY, false));
     this.canvas.addEventListener('click', (e) => {
-      this.fallbackAudio.init();
+      this.audio.init();
       triggerAim(e.clientX, e.clientY, true);
     });
 
+    // أحداث اللمس الاحترافية لشاشات الهواتف مع دعم التصويب بالليزر
     this.canvas.addEventListener('touchstart', (e) => {
-      this.fallbackAudio.init();
+      this.audio.init();
       if (e.touches.length > 0) {
         const t = e.touches[0];
-        const distToCenter = Math.hypot(t.clientX - this.frog.x, t.clientY - this.frog.y);
-        if (distToCenter < this.frog.radius * 1.2) {
-          this.swapMarbles();
+        const distFromFrog = Math.hypot(t.clientX - this.frog.x, t.clientY - this.frog.y);
+        // النقر على الضفدع نفسه يبدل الكرات
+        if (distFromFrog < this.frog.radius * 1.3) {
+          this.swapOrbs();
         } else {
-          triggerAim(t.clientX, t.clientY, true);
+          this.isAiming = true;
+          triggerAim(t.clientX, t.clientY, false);
         }
       }
     }, { passive: true });
 
     this.canvas.addEventListener('touchmove', (e) => {
-      if (e.touches.length > 0) {
+      if (e.touches.length > 0 && this.isAiming) {
         triggerAim(e.touches[0].clientX, e.touches[0].clientY, false);
       }
     }, { passive: true });
 
-    // أزرار التحكم
-    document.getElementById('btn-swap-marble').addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.swapMarbles();
+    this.canvas.addEventListener('touchend', (e) => {
+      if (this.isAiming) {
+        this.isAiming = false;
+        this.fireOrb();
+      }
     });
-    document.getElementById('btn-start-game').addEventListener('click', () => {
-      this.fallbackAudio.init();
+
+    // الأزرار
+    document.getElementById('btn-swap-ball').addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.swapOrbs();
+    });
+
+    document.getElementById('btn-sound-toggle').addEventListener('click', () => {
+      this.audio.init();
+      const muted = this.audio.toggleMute();
+      document.getElementById('btn-sound-toggle').textContent = muted ? '🔇' : '🔊';
+    });
+
+    document.getElementById('btn-pause-game').addEventListener('click', () => this.togglePause());
+    document.getElementById('btn-continue-game').addEventListener('click', () => this.togglePause());
+    document.getElementById('btn-restart-current').addEventListener('click', () => this.startLevel(this.level));
+
+    document.getElementById('btn-play-now').addEventListener('click', () => {
+      this.audio.init();
       this.startLevel(1);
     });
     document.getElementById('btn-next-stage').addEventListener('click', () => {
-      this.fallbackAudio.init();
+      this.audio.init();
       this.startLevel(this.level + 1);
     });
-    document.getElementById('btn-restart-game').addEventListener('click', () => {
-      this.fallbackAudio.init();
+    document.getElementById('btn-retry-all').addEventListener('click', () => {
+      this.audio.init();
       this.lives = 3;
       this.score = 0;
       this.startLevel(1);
     });
-    document.getElementById('btn-pause').addEventListener('click', () => this.togglePause());
-    document.getElementById('btn-resume-game').addEventListener('click', () => this.togglePause());
-    document.getElementById('btn-replay-level').addEventListener('click', () => this.startLevel(this.level));
   }
 
-  swapMarbles() {
-    const temp = this.frog.currentMarble;
-    this.frog.currentMarble = this.frog.nextMarble;
-    this.frog.nextMarble = temp;
-    this.assetManager.playSound('insert', () => this.fallbackAudio.insert());
+  swapOrbs() {
+    const tmpOrb = this.frog.currentOrb;
+    const tmpPower = this.frog.currentPower;
+    this.frog.currentOrb = this.frog.nextOrb;
+    this.frog.currentPower = this.frog.nextPower;
+    this.frog.nextOrb = tmpOrb;
+    this.frog.nextPower = tmpPower;
+
+    this.audio.playClack();
     this.frog.recoil = 6;
+    if (navigator.vibrate) navigator.vibrate(10);
   }
 
-  shoot() {
+  fireOrb() {
     if (this.bullets.length >= 2) return;
-    const spd = 20;
-    const r = this.frog.radius + 6;
+    const speed = 21;
+    const spawnDist = this.frog.radius + 6;
+    const bx = this.frog.x + Math.cos(this.frog.angle) * spawnDist;
+    const by = this.frog.y + Math.sin(this.frog.angle) * spawnDist;
+
     this.bullets.push({
-      x: this.frog.x + Math.cos(this.frog.angle) * r,
-      y: this.frog.y + Math.sin(this.frog.angle) * r,
-      vx: Math.cos(this.frog.angle) * spd,
-      vy: Math.sin(this.frog.angle) * spd,
-      color: this.frog.currentMarble,
-      radius: MARBLE_RADIUS
+      x: bx,
+      y: by,
+      vx: Math.cos(this.frog.angle) * speed,
+      vy: Math.sin(this.frog.angle) * speed,
+      color: this.frog.currentOrb,
+      power: this.frog.currentPower,
+      radius: ORB_RADIUS,
+      distTraveled: 0
     });
 
-    this.assetManager.playSound('shoot', () => this.fallbackAudio.shoot());
-    this.frog.recoil = 8;
+    this.audio.playShoot();
+    this.frog.recoil = 10;
+    this.frog.tongueOut = 12;
+    if (navigator.vibrate) navigator.vibrate(18);
 
-    this.frog.currentMarble = this.frog.nextMarble;
-    this.frog.nextMarble = this.getNextMarbleColor();
+    // تدوير الكرة القادمة
+    this.frog.currentOrb = this.frog.nextOrb;
+    this.frog.currentPower = this.frog.nextPower;
+    this.frog.nextOrb = this.pickWeightedOrbColor();
+    this.frog.nextPower = this.rollPowerup();
   }
 
-  getNextMarbleColor() {
-    if (this.chain.length > 0 && Math.random() < 0.75) {
+  pickWeightedOrbColor() {
+    if (this.chain.length > 0 && Math.random() < 0.8) {
       return this.chain[Math.floor(Math.random() * this.chain.length)].color;
     }
-    const maxColors = Math.min(2 + this.level, MARBLE_PALETTE.length);
-    return Math.floor(Math.random() * maxColors);
+    const colors = Math.min(3 + this.level, ORB_TYPES.length);
+    return Math.floor(Math.random() * colors);
   }
 
   togglePause() {
     if (!this.isPlaying) return;
     this.isPaused = !this.isPaused;
-    const modal = document.getElementById('pause-modal');
+    const m = document.getElementById('modal-pause');
     if (this.isPaused) {
-      modal.classList.remove('hidden');
-      modal.classList.add('show');
+      m.classList.remove('hidden');
+      m.classList.add('show');
     } else {
-      modal.classList.add('hidden');
-      modal.classList.remove('show');
+      m.classList.add('hidden');
+      m.classList.remove('show');
     }
   }
 
-  hideModals() {
-    document.querySelectorAll('.modal').forEach(m => {
+  hideAllModals() {
+    document.querySelectorAll('.game-modal').forEach(m => {
       m.classList.add('hidden');
       m.classList.remove('show');
     });
   }
 
   updateHUD() {
-    document.getElementById('score-display').textContent = this.score;
-    document.getElementById('level-display').textContent = this.level;
+    document.getElementById('txt-score').textContent = this.score;
+    document.getElementById('txt-level').textContent = this.level;
 
-    const livesBox = document.getElementById('lives-container');
+    const livesBox = document.getElementById('lives-rack');
     livesBox.innerHTML = '';
     for (let i = 0; i < 3; i++) {
-      const s = document.createElement('span');
-      s.textContent = '🐸';
-      s.style.opacity = i < this.lives ? '1' : '0.2';
-      livesBox.appendChild(s);
+      const sp = document.createElement('span');
+      sp.textContent = '🐸';
+      sp.style.opacity = i < this.lives ? '1' : '0.2';
+      livesBox.appendChild(sp);
     }
 
     const total = this.totalMarbles;
     const remaining = total - this.marblesSpawned + this.chain.length;
     const pct = Math.max(0, Math.min(100, Math.floor(((total - remaining) / total) * 100)));
-    document.getElementById('progress-fill').style.width = `${pct}%`;
+    document.getElementById('zuma-bar-progress').style.width = `${pct}%`;
   }
 
+  // ==========================================================
+  // 4. فيزياء اللعبة والمطابقات (Game Physics & Combos)
+  // ==========================================================
   update() {
     if (!this.isPlaying || this.isPaused) return;
 
+    if (this.screenShake > 0) this.screenShake *= 0.88;
     if (this.frog.recoil > 0) this.frog.recoil -= 0.8;
+    if (this.frog.tongueOut > 0) this.frog.tongueOut -= 1.2;
 
-    // إنتاج الكرات على المسار
+    // حساب سرعة السلسلة وتأثير الإبطاء
+    let currentSpeed = this.baseSpeed;
+    if (this.slowdownTimer > 0) {
+      this.slowdownTimer--;
+      currentSpeed *= 0.3;
+    }
+
+    // إنتاج كرات جديدة عند بداية المسار
     if (this.marblesSpawned < this.totalMarbles) {
-      if (this.chain.length === 0 || this.chain[0].dist >= MARBLE_DIAMETER) {
-        const maxColors = Math.min(2 + this.level, MARBLE_PALETTE.length);
+      if (this.chain.length === 0 || this.chain[0].dist >= ORB_DIAMETER) {
+        const colors = Math.min(3 + this.level, ORB_TYPES.length);
         this.chain.unshift({
           dist: 0,
-          color: Math.floor(Math.random() * maxColors)
+          color: Math.floor(Math.random() * colors),
+          power: this.rollPowerup(),
+          rollAngle: 0
         });
         this.marblesSpawned++;
       }
     }
 
-    // حركة السلسلة
+    // حركة السلسلة للأمام ودوران الكرات 3D
     if (this.chain.length > 0) {
-      this.chain[this.chain.length - 1].dist += this.speed;
+      this.chain[this.chain.length - 1].dist += currentSpeed;
 
       for (let i = this.chain.length - 2; i >= 0; i--) {
         const lead = this.chain[i + 1];
         const cur = this.chain[i];
-        const target = lead.dist - MARBLE_DIAMETER;
+        const target = lead.dist - ORB_DIAMETER;
         if (cur.dist > target) {
           cur.dist = target;
         } else if (cur.dist < target) {
-          cur.dist += this.speed;
+          cur.dist += currentSpeed;
+        }
+        cur.rollAngle = (cur.dist * 0.08) % (Math.PI * 2);
+      }
+
+      // الانجذاب المغناطيسي التلقائي عند إغلاق الثغرات
+      this.resolveMagneticSnaps();
+
+      // حالة فم الجمجمة وعيونها المتوهجة
+      const head = this.chain[this.chain.length - 1];
+      const distRatio = head.dist / this.pathLength;
+      this.skull.mouthOpen = Math.max(0, (distRatio - 0.7) * 3.3);
+      this.skull.isGlowing = distRatio > 0.75;
+
+      if (this.skull.isGlowing) {
+        this.dangerBeepTimer++;
+        if (this.dangerBeepTimer % 32 === 0) {
+          this.audio.playDangerPulse();
+          if (navigator.vibrate) navigator.vibrate(25);
         }
       }
 
-      // الانجذاب المغناطيسي
-      this.resolveMagneticAttraction();
-
-      // التحقق من خسارة المحاولة
-      if (this.chain[this.chain.length - 1].dist >= this.pathLength - 20) {
-        this.onLifeLost();
+      // الخسارة عند دخول الجمجمة
+      if (head.dist >= this.pathLength - 16) {
+        this.handleLifeLoss();
         return;
       }
     } else if (this.marblesSpawned >= this.totalMarbles) {
-      this.onLevelWin();
+      this.handleStageVictory();
       return;
+    }
+
+    // تحديث العملة الذهبية
+    if (this.coin.active) {
+      this.coin.rot += 0.04;
+      this.coin.timer--;
+      if (this.coin.timer <= 0) this.coin.active = false;
     }
 
     // تحديث المقذوفات
     this.updateBullets();
 
-    // تحديث الجسيمات
+    // تحديث المؤثرات البصرية
     this.updateParticles();
 
     this.updateHUD();
   }
 
-  resolveMagneticAttraction() {
+  resolveMagneticSnaps() {
     for (let i = 0; i < this.chain.length - 1; i++) {
       const cur = this.chain[i];
       const next = this.chain[i + 1];
-      const gap = next.dist - cur.dist - MARBLE_DIAMETER;
+      const gap = next.dist - cur.dist - ORB_DIAMETER;
 
       if (gap > 2 && cur.color === next.color) {
-        const pull = Math.min(8.0, gap * 0.4 + 2);
+        const pull = Math.min(9.0, gap * 0.45 + 2);
         for (let k = 0; k <= i; k++) {
           this.chain[k].dist += pull;
         }
-        if (next.dist - cur.dist <= MARBLE_DIAMETER + 1) {
-          this.assetManager.playSound('snap', () => this.fallbackAudio.snap());
-          this.checkMatchAt(i, 2);
+
+        if (next.dist - cur.dist <= ORB_DIAMETER + 1) {
+          this.audio.playSnapReverse();
+          this.checkMatchCombos(i, 2);
           break;
         }
       }
@@ -504,18 +764,29 @@ class ZumaMobileGame {
       const b = this.bullets[i];
       b.x += b.vx;
       b.y += b.vy;
+      b.distTraveled += Math.hypot(b.vx, b.vy);
 
+      // صيد العملة الذهبية بالمقذوف
+      if (this.coin.active && Math.hypot(b.x - this.coin.x, b.y - this.coin.y) < 26) {
+        this.coin.active = false;
+        this.score += 500;
+        this.audio.playCoinPickup();
+        this.createCoinSparks(this.coin.x, this.coin.y);
+        this.addPopupText(this.coin.x, this.coin.y, '+500 🪙');
+      }
+
+      // الخروج خارج حدود الشاشة
       if (b.x < -30 || b.x > this.width + 30 || b.y < -30 || b.y > this.height + 30) {
         this.bullets.splice(i, 1);
         continue;
       }
 
-      // التحقق من الاصطدام بالسلسلة
+      // فحص الاصطدام بالكرات في السلسلة
       for (let c = 0; c < this.chain.length; c++) {
         const marble = this.chain[c];
-        const pos = this.getPoint(marble.dist);
-        if (Math.hypot(b.x - pos.x, b.y - pos.y) <= MARBLE_RADIUS + b.radius) {
-          this.insertMarbleToChain(c, b);
+        const pos = this.getPathPoint(marble.dist);
+        if (Math.hypot(b.x - pos.x, b.y - pos.y) <= ORB_RADIUS + b.radius) {
+          this.insertBulletIntoChain(c, b);
           this.bullets.splice(i, 1);
           break;
         }
@@ -523,63 +794,139 @@ class ZumaMobileGame {
     }
   }
 
-  insertMarbleToChain(hitIdx, bullet) {
-    const hitM = this.chain[hitIdx];
-    const hitP = this.getPoint(hitM.dist);
-    const dot = (bullet.x - hitP.x) * Math.cos(hitP.angle) + (bullet.y - hitP.y) * Math.sin(hitP.angle);
-    
+  insertBulletIntoChain(hitIdx, bullet) {
+    const hitOrb = this.chain[hitIdx];
+    const hitPos = this.getPathPoint(hitOrb.dist);
+    const dot = (bullet.x - hitPos.x) * Math.cos(hitPos.angle) + (bullet.y - hitPos.y) * Math.sin(hitPos.angle);
+
     let insertIdx = dot > 0 ? hitIdx + 1 : hitIdx;
-    let dist = dot > 0 ? hitM.dist + MARBLE_DIAMETER : Math.max(0, hitM.dist - MARBLE_DIAMETER);
+    let dist = dot > 0 ? hitOrb.dist + ORB_DIAMETER : Math.max(0, hitOrb.dist - ORB_DIAMETER);
 
-    this.chain.splice(insertIdx, 0, { dist: dist, color: bullet.color });
-    this.assetManager.playSound('insert', () => this.fallbackAudio.insert());
+    this.chain.splice(insertIdx, 0, {
+      dist: dist,
+      color: bullet.color,
+      power: bullet.power,
+      rollAngle: 0
+    });
 
+    this.audio.playClack();
+
+    // إزاحة الكرات السابقة
     for (let k = 0; k < insertIdx; k++) {
-      this.chain[k].dist = Math.max(0, this.chain[k].dist - MARBLE_DIAMETER);
+      this.chain[k].dist = Math.max(0, this.chain[k].dist - ORB_DIAMETER);
     }
 
-    this.checkMatchAt(insertIdx, 1);
+    // فحص التطابق أو تفعيل القوى
+    this.checkMatchCombos(insertIdx, 1);
   }
 
-  checkMatchAt(idx, combo = 1) {
+  checkMatchCombos(idx, comboMultiplier = 1) {
     if (idx < 0 || idx >= this.chain.length) return;
-    const color = this.chain[idx].color;
+    const targetColor = this.chain[idx].color;
     let start = idx;
     let end = idx;
 
-    while (start > 0 && this.chain[start - 1].color === color) start--;
-    while (end < this.chain.length - 1 && this.chain[end + 1].color === color) end++;
+    while (start > 0 && this.chain[start - 1].color === targetColor) start--;
+    while (end < this.chain.length - 1 && this.chain[end + 1].color === targetColor) end++;
 
     const count = end - start + 1;
     if (count >= 3) {
-      const pts = count * 100 * combo;
-      this.score += pts;
-      const centerPos = this.getPoint(this.chain[Math.floor((start + end) / 2)].dist);
-      this.createBurst(centerPos.x, centerPos.y, color, count);
-      this.addPopup(centerPos.x, centerPos.y, `+${pts}${combo > 1 ? ' x' + combo : ''}`);
-      this.assetManager.playSound('match', () => this.fallbackAudio.match(combo));
+      // تفجير الكرات المتطابقة
+      let hasBomb = false;
+      let hasBackward = false;
+      let hasSlow = false;
+
+      for (let k = start; k <= end; k++) {
+        if (this.chain[k].power === POWER_TYPES.BOMB) hasBomb = true;
+        if (this.chain[k].power === POWER_TYPES.BACKWARD) hasBackward = true;
+        if (this.chain[k].power === POWER_TYPES.SLOWDOWN) hasSlow = true;
+      }
+
+      const points = count * 100 * comboMultiplier;
+      this.score += points;
+
+      const centerPos = this.getPathPoint(this.chain[Math.floor((start + end) / 2)].dist);
+      this.createGemBurst(centerPos.x, centerPos.y, targetColor, count);
+      this.addPopupText(centerPos.x, centerPos.y, `+${points}${comboMultiplier > 1 ? ' COMBO x' + comboMultiplier : ''}`);
+      this.audio.playComboChime(comboMultiplier);
+
+      if (navigator.vibrate) navigator.vibrate(comboMultiplier > 1 ? [30, 20, 50] : 30);
+
+      // تفعيل القوى الخارقة إن وجدت
+      if (hasBomb) {
+        this.triggerBombPower(centerPos.x, centerPos.y, start);
+      }
+      if (hasBackward) {
+        this.triggerBackwardPower();
+      }
+      if (hasSlow) {
+        this.slowdownTimer = 220; // إبطاء لمدة ~5 ثوانٍ
+        this.addPopupText(this.frog.x, this.frog.y - 60, '❄️ تباطؤ زمني!');
+      }
+
       this.chain.splice(start, count);
     }
   }
 
-  createBurst(x, y, colorId, count) {
-    const pData = MARBLE_PALETTE[colorId];
-    for (let i = 0; i < count * 8; i++) {
+  triggerBombPower(x, y, atIndex) {
+    this.audio.playBombBoom();
+    this.screenShake = 14;
+    this.addPopupText(x, y, '💣 انفجار خارق!');
+    // إزالة كرتين قبل وكرتين بعد موقع القنبلة
+    const removeStart = Math.max(0, atIndex - 2);
+    const removeCount = Math.min(5, this.chain.length - removeStart);
+    for (let i = 0; i < 25; i++) {
+      this.particles.push({
+        x: x, y: y,
+        vx: (Math.random() - 0.5) * 12,
+        vy: (Math.random() - 0.5) * 12,
+        color: '#ff9800',
+        size: 5 + Math.random() * 4,
+        alpha: 1, decay: 0.03
+      });
+    }
+    this.chain.splice(removeStart, removeCount);
+  }
+
+  triggerBackwardPower() {
+    this.audio.playSnapReverse();
+    this.addPopupText(this.frog.x, this.frog.y - 60, '⏪ تراجع السلسلة!');
+    for (let i = 0; i < this.chain.length; i++) {
+      this.chain[i].dist = Math.max(0, this.chain[i].dist - 140);
+    }
+  }
+
+  createGemBurst(x, y, colorId, count) {
+    const pal = ORB_TYPES[colorId];
+    for (let i = 0; i < count * 9; i++) {
       const a = Math.random() * Math.PI * 2;
-      const s = 2 + Math.random() * 5;
+      const s = 2.5 + Math.random() * 6.5;
       this.particles.push({
         x: x, y: y,
         vx: Math.cos(a) * s, vy: Math.sin(a) * s,
-        color: Math.random() > 0.4 ? pData.c1 : pData.hi,
-        radius: 3 + Math.random() * 3,
-        alpha: 1,
-        decay: 0.03
+        color: Math.random() > 0.4 ? pal.cMid : pal.cTop,
+        size: 3 + Math.random() * 3.5,
+        alpha: 1, decay: 0.025
       });
     }
   }
 
-  addPopup(x, y, txt) {
-    this.floatingTexts.push({ x, y, txt, alpha: 1.0 });
+  createCoinSparks(x, y) {
+    for (let i = 0; i < 20; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = 3 + Math.random() * 5;
+      this.particles.push({
+        x: x, y: y,
+        vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+        color: '#ffd700',
+        size: 3.5,
+        alpha: 1, decay: 0.03
+      });
+    }
+  }
+
+  addPopupText(x, y, txt) {
+    this.popups.push({ x: x, y: y, txt: txt, alpha: 1.0 });
   }
 
   updateParticles() {
@@ -590,23 +937,24 @@ class ZumaMobileGame {
       p.alpha -= p.decay;
       if (p.alpha <= 0) this.particles.splice(i, 1);
     }
-    for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
-      const t = this.floatingTexts[i];
-      t.y -= 1.4;
-      t.alpha -= 0.02;
-      if (t.alpha <= 0) this.floatingTexts.splice(i, 1);
+    for (let i = this.popups.length - 1; i >= 0; i--) {
+      const pop = this.popups[i];
+      pop.y -= 1.3;
+      pop.alpha -= 0.018;
+      if (pop.alpha <= 0) this.popups.splice(i, 1);
     }
   }
 
-  onLifeLost() {
+  handleLifeLoss() {
     this.lives--;
-    this.assetManager.playSound('gameover', () => this.fallbackAudio.gameover());
+    this.audio.playDefeat();
     this.updateHUD();
 
     if (this.lives <= 0) {
       this.isPlaying = false;
-      document.getElementById('gameover-score').textContent = this.score;
-      const m = document.getElementById('gameover-modal');
+      this.audio.stopTribalBGM();
+      document.getElementById('over-score-txt').textContent = this.score;
+      const m = document.getElementById('modal-gameover');
       m.classList.remove('hidden');
       m.classList.add('show');
     } else {
@@ -614,219 +962,417 @@ class ZumaMobileGame {
     }
   }
 
-  onLevelWin() {
+  handleStageVictory() {
     this.isPlaying = false;
-    this.assetManager.playSound('victory', () => this.fallbackAudio.victory());
-    document.getElementById('victory-score').textContent = this.score;
-    const m = document.getElementById('victory-modal');
+    this.audio.stopTribalBGM();
+    this.audio.playVictory();
+    document.getElementById('win-score-txt').textContent = this.score;
+    const m = document.getElementById('modal-win');
     m.classList.remove('hidden');
     m.classList.add('show');
   }
 
-  // ==========================================
-  // نظام الرسم والعرض (Render Engine)
-  // ==========================================
+  // ==========================================================
+  // 5. محرك الرسم والتجسيم ثلاثي الأبعاد (High-End Render Engine)
+  // ==========================================================
   draw() {
+    this.ctx.save();
+    // اهتزاز الشاشة السينمائي عند الانفجارات
+    if (this.screenShake > 0.5) {
+      const sx = (Math.random() - 0.5) * this.screenShake;
+      const sy = (Math.random() - 0.5) * this.screenShake;
+      this.ctx.translate(sx, sy);
+    }
+
     this.ctx.clearRect(0, 0, this.width, this.height);
 
-    // 1. رسم الخلفية (صورة خارجية أو رسم إجرائي)
-    const bgImg = this.assetManager.images.background;
-    if (bgImg) {
-      this.ctx.drawImage(bgImg, 0, 0, this.width, this.height);
-    } else {
-      this.drawProceduralBackground();
-    }
+    // 1. أرضية معبد المايا الأثرية
+    this.drawMayanTempleFloor();
 
-    // 2. رسم مسار الحجر المنحوت
-    this.drawTrack();
+    // 2. مجرى الحجر المنحوت الغائر (Stone Track)
+    this.drawStoneTrack();
 
-    // 3. رسم الجمجمة (صورة خارجية أو إجرائي)
-    this.drawSkull();
+    // 3. العملة الذهبية المايانية
+    this.drawMayanGoldCoin();
 
-    // 4. رسم كرات السلسلة
+    // 4. فم الجمجمة الذهبية
+    this.drawMayanSkullPit();
+
+    // 5. كرات السلسلة ثلاثية الأبعاد
     for (let i = 0; i < this.chain.length; i++) {
       const m = this.chain[i];
-      const pos = this.getPoint(m.dist);
-      this.drawMarble(pos.x, pos.y, m.color, MARBLE_RADIUS);
+      const pos = this.getPathPoint(m.dist);
+      this.draw3DRollingOrb(pos.x, pos.y, m.color, m.power, m.rollAngle, ORB_RADIUS);
     }
 
-    // 5. رسم المقذوفات
+    // 6. المقذوفات النارية
     for (let i = 0; i < this.bullets.length; i++) {
       const b = this.bullets[i];
-      this.drawMarble(b.x, b.y, b.color, b.radius);
+      this.draw3DRollingOrb(b.x, b.y, b.color, b.power, 0, b.radius);
     }
 
-    // 6. رسم الضفدع الرامي (صورة خارجية أو شكل إجرائي)
-    this.drawFrog();
-
-    // 7. رسم الجسيمات والنصوص
-    this.drawEffects();
-  }
-
-  drawProceduralBackground() {
-    this.ctx.save();
-    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
-    for (let x = 0; x < this.width; x += 50) {
-      this.ctx.beginPath();
-      this.ctx.moveTo(x, 0);
-      this.ctx.lineTo(x, this.height);
-      this.ctx.stroke();
+    // 7. شعاع التصويب الذهبي (Laser Aiming Guide)
+    if (this.isAiming) {
+      this.drawLaserSight();
     }
+
+    // 8. ضفدع زوما الأسطوري
+    this.drawAuthenticZumaFrog();
+
+    // 9. الجسيمات والنصوص العائمة
+    this.drawVisualFX();
+
     this.ctx.restore();
   }
 
-  drawTrack() {
+  drawMayanTempleFloor() {
+    // نقوش أثرية على بلاط المعبد
+    this.ctx.save();
+    const cx = this.width / 2;
+    const cy = this.height / 2;
+    
+    // الدائرة الشمسية الكبرى في مركز المعبد
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, Math.min(this.width, this.height) * 0.44, 0, Math.PI * 2);
+    this.ctx.strokeStyle = 'rgba(255, 179, 0, 0.05)';
+    this.ctx.lineWidth = 14;
+    this.ctx.stroke();
+
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, Math.min(this.width, this.height) * 0.28, 0, Math.PI * 2);
+    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+    this.ctx.lineWidth = 4;
+    this.ctx.stroke();
+    this.ctx.restore();
+  }
+
+  drawStoneTrack() {
     if (this.path.length < 2) return;
     this.ctx.save();
     this.ctx.beginPath();
     this.ctx.moveTo(this.path[0].x, this.path[0].y);
-    for (let i = 1; i < this.path.length; i += 2) {
+    for (let i = 1; i < this.path.length; i += 3) {
       this.ctx.lineTo(this.path[i].x, this.path[i].y);
     }
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
 
-    // حواف الحفرة
-    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
-    this.ctx.lineWidth = MARBLE_DIAMETER + 10;
+    // الظل الغائر للحفرة الحجرية
+    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+    this.ctx.lineWidth = ORB_DIAMETER + 10;
     this.ctx.stroke();
 
-    this.ctx.strokeStyle = '#122a30';
-    this.ctx.lineWidth = MARBLE_DIAMETER + 4;
+    // إطار الحجر الرملي المشطوف
+    this.ctx.strokeStyle = '#18333b';
+    this.ctx.lineWidth = ORB_DIAMETER + 4;
     this.ctx.stroke();
 
+    // عمق المسار المظلم
     this.ctx.strokeStyle = '#051114';
-    this.ctx.lineWidth = MARBLE_DIAMETER - 4;
+    this.ctx.lineWidth = ORB_DIAMETER - 2;
     this.ctx.stroke();
     this.ctx.restore();
   }
 
-  drawSkull() {
-    const skullImg = this.assetManager.images.skull;
+  drawLaserSight() {
     this.ctx.save();
-    this.ctx.translate(this.skullPos.x, this.skullPos.y);
-    this.ctx.rotate(this.skullAngle);
+    const len = 320;
+    const ex = this.frog.x + Math.cos(this.frog.angle) * len;
+    const ey = this.frog.y + Math.sin(this.frog.angle) * len;
 
-    if (skullImg) {
-      this.ctx.drawImage(skullImg, -28, -28, 56, 56);
-    } else {
-      this.ctx.beginPath();
-      this.ctx.arc(0, 0, 24, 0, Math.PI * 2);
-      this.ctx.fillStyle = '#020608';
-      this.ctx.fill();
-      this.ctx.strokeStyle = '#37474f';
-      this.ctx.lineWidth = 3;
-      this.ctx.stroke();
-      this.ctx.fillStyle = '#b0bec5';
-      this.ctx.font = '22px sans-serif';
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.ctx.fillText('💀', 0, 0);
-    }
+    this.ctx.beginPath();
+    this.ctx.moveTo(this.frog.x + Math.cos(this.frog.angle) * this.frog.radius, this.frog.y + Math.sin(this.frog.angle) * this.frog.radius);
+    this.ctx.lineTo(ex, ey);
+    this.ctx.strokeStyle = 'rgba(255, 215, 0, 0.45)';
+    this.ctx.lineWidth = 2.5;
+    this.ctx.setLineDash([8, 6]);
+    this.ctx.stroke();
     this.ctx.restore();
   }
 
-  drawMarble(x, y, colorId, radius) {
-    const p = MARBLE_PALETTE[colorId];
-    const customImg = this.assetManager.images.marbles ? this.assetManager.images.marbles[p.key] : null;
+  drawMayanGoldCoin() {
+    if (!this.coin.active) return;
+    this.ctx.save();
+    this.ctx.translate(this.coin.x, this.coin.y);
+    this.ctx.rotate(this.coin.rot);
 
-    if (customImg) {
-      this.ctx.drawImage(customImg, x - radius, y - radius, radius * 2, radius * 2);
-      return;
+    // توهج العملة الذهبية
+    this.ctx.beginPath();
+    this.ctx.arc(0, 0, 18, 0, Math.PI * 2);
+    this.ctx.fillStyle = 'rgba(255, 215, 0, 0.25)';
+    this.ctx.fill();
+
+    // قرص الشمس الذهبي
+    this.ctx.beginPath();
+    this.ctx.arc(0, 0, 14, 0, Math.PI * 2);
+    const g = this.ctx.createRadialGradient(-4, -4, 2, 0, 0, 14);
+    g.addColorStop(0, '#fff9c4');
+    g.addColorStop(0.5, '#ffd700');
+    g.addColorStop(1, '#ff8f00');
+    this.ctx.fillStyle = g;
+    this.ctx.fill();
+    this.ctx.strokeStyle = '#fff';
+    this.ctx.lineWidth = 1.5;
+    this.ctx.stroke();
+
+    // نقش الشمس
+    this.ctx.fillStyle = '#b78103';
+    this.ctx.font = 'bold 12px sans-serif';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText('☼', 0, 0);
+
+    this.ctx.restore();
+  }
+
+  drawMayanSkullPit() {
+    this.ctx.save();
+    this.ctx.translate(this.skull.x, this.skull.y);
+    this.ctx.rotate(this.skull.angle);
+
+    // توهج الخطر الأحمر النابض
+    if (this.skull.isGlowing) {
+      this.ctx.beginPath();
+      this.ctx.arc(0, 0, 36, 0, Math.PI * 2);
+      this.ctx.fillStyle = 'rgba(255, 23, 68, 0.35)';
+      this.ctx.fill();
     }
 
-    // رسم الكرة ثلاثية الأبعاد اللامعة إجرائياً
+    // فم الحفرة الأسود العميق
+    this.ctx.beginPath();
+    this.ctx.arc(0, 0, 24, 0, Math.PI * 2);
+    this.ctx.fillStyle = '#000';
+    this.ctx.fill();
+
+    // هيكل الجمجمة الحجرية
+    this.ctx.fillStyle = this.skull.isGlowing ? '#ff5252' : '#78909c';
+    this.ctx.strokeStyle = '#263238';
+    this.ctx.lineWidth = 2;
+
+    // رأس الجمجمة
+    this.ctx.beginPath();
+    this.ctx.arc(0, -6, 20, Math.PI, 0, false);
+    this.ctx.lineTo(12, 14);
+    this.ctx.lineTo(-12, 14);
+    this.ctx.closePath();
+    this.ctx.fill();
+    this.ctx.stroke();
+
+    // فتحات العيون المتوهجة
+    this.ctx.fillStyle = this.skull.isGlowing ? '#ffebee' : '#102027';
+    this.ctx.beginPath();
+    this.ctx.arc(-7, -4, 4.5, 0, Math.PI * 2);
+    this.ctx.arc(7, -4, 4.5, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // فك الأسنان الحجرية يفتح ويغلق بحسب اقتراب الكرات
+    const jawDrop = this.skull.mouthOpen * 6;
+    this.ctx.fillStyle = '#eceff1';
+    for (let t = -8; t <= 8; t += 4) {
+      this.ctx.fillRect(t - 1, 8 + jawDrop, 2.5, 4);
+    }
+
+    this.ctx.restore();
+  }
+
+  // رسم الكرات ثلاثية الأبعاد اللامعة مع نقوش الدوران وقوى الباور-آب
+  draw3DRollingOrb(x, y, colorId, power, rollAngle, radius) {
+    const pal = ORB_TYPES[colorId];
     this.ctx.save();
+
+    // ظل الكرة على أرضية المعبد
+    this.ctx.beginPath();
+    this.ctx.arc(x + 3, y + 4, radius, 0, Math.PI * 2);
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    this.ctx.fill();
+
+    // التدرج الكروي الزجاجي ثلاثي الأبعاد
     this.ctx.beginPath();
     this.ctx.arc(x, y, radius, 0, Math.PI * 2);
-
     const grad = this.ctx.createRadialGradient(
-      x - radius * 0.35, y - radius * 0.35, radius * 0.1,
+      x - radius * 0.35, y - radius * 0.35, radius * 0.08,
       x, y, radius
     );
-    grad.addColorStop(0, p.hi);
-    grad.addColorStop(0.3, p.c1);
-    grad.addColorStop(1, p.c2);
+    grad.addColorStop(0, pal.cTop);
+    grad.addColorStop(0.35, pal.cMid);
+    grad.addColorStop(1, pal.cDark);
 
     this.ctx.fillStyle = grad;
     this.ctx.fill();
 
-    // رمز الكرة الداخلي
-    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-    this.ctx.font = `bold ${radius * 0.85}px sans-serif`;
-    this.ctx.textAlign = 'center';
-    this.ctx.textBaseline = 'middle';
-    this.ctx.fillText(p.symbol, x, y);
+    // رسم تأثير الكرة الخارقة إن وجد
+    if (power === POWER_TYPES.BOMB) {
+      this.ctx.fillStyle = '#ffea00';
+      this.ctx.font = 'bold 13px sans-serif';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText('💣', x, y);
+    } else if (power === POWER_TYPES.BACKWARD) {
+      this.ctx.fillStyle = '#fff';
+      this.ctx.font = 'bold 12px sans-serif';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText('⏪', x, y);
+    } else if (power === POWER_TYPES.SLOWDOWN) {
+      this.ctx.fillStyle = '#e0f7fa';
+      this.ctx.font = 'bold 12px sans-serif';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText('❄️', x, y);
+    } else {
+      // النقش الماياني الداخلي المتدحرج مع فيزياء الـ 3D
+      this.ctx.save();
+      this.ctx.translate(x, y);
+      this.ctx.rotate(rollAngle);
+      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      this.ctx.font = `bold ${radius * 0.85}px sans-serif`;
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(pal.glyph, 0, 0);
+      this.ctx.restore();
+    }
+
+    // لمعان زجاجي علوي شديد النقاء (Specular Glint)
+    this.ctx.beginPath();
+    this.ctx.arc(x - radius * 0.32, y - radius * 0.32, radius * 0.28, 0, Math.PI * 2);
+    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+    this.ctx.fill();
 
     this.ctx.restore();
   }
 
-  drawFrog() {
+  // رسم ضفدع زوما الحجري الكلاسيكي بكافة تفاصيل الصورة المرفقة
+  drawAuthenticZumaFrog() {
     this.ctx.save();
     this.ctx.translate(this.frog.x, this.frog.y);
     this.ctx.rotate(this.frog.angle);
 
-    const frogImg = this.assetManager.images.frog;
-    if (frogImg) {
-      const s = this.frog.radius * 2.2 - this.frog.recoil;
-      this.ctx.drawImage(frogImg, -s / 2, -s / 2, s, s);
-    } else {
-      // قاعدة تمثال الضفدع الحجرية
+    const r = this.frog.radius;
+
+    // 1. قاعدة الدرع الحجري البني المنحوت
+    this.ctx.beginPath();
+    this.ctx.arc(-4 - this.frog.recoil, 0, r, 0, Math.PI * 2);
+    const shellGrad = this.ctx.createRadialGradient(-10, -10, 5, 0, 0, r);
+    shellGrad.addColorStop(0, '#8d6e63');
+    shellGrad.addColorStop(0.7, '#4e342e');
+    shellGrad.addColorStop(1, '#271915');
+    this.ctx.fillStyle = shellGrad;
+    this.ctx.fill();
+    this.ctx.strokeStyle = '#ffb300';
+    this.ctx.lineWidth = 2.5;
+    this.ctx.stroke();
+
+    // 2. يدا الضفدع الأخضران الممسكتان بالحافة
+    this.ctx.fillStyle = '#43a047';
+    this.ctx.strokeStyle = '#1b5e20';
+    this.ctx.lineWidth = 2;
+    // اليد اليمنى واليسرى
+    [-24, 24].forEach(offsetY => {
       this.ctx.beginPath();
-      this.ctx.arc(0, 0, this.frog.radius, 0, Math.PI * 2);
-      this.ctx.fillStyle = '#1c362d';
+      this.ctx.ellipse(r * 0.4, offsetY, 10, 7, offsetY > 0 ? 0.3 : -0.3, 0, Math.PI * 2);
       this.ctx.fill();
-      this.ctx.strokeStyle = '#00e676';
-      this.ctx.lineWidth = 3;
+      this.ctx.stroke();
+    });
+
+    // 3. رأس الضفدع الأخضر اللامع
+    this.ctx.beginPath();
+    this.ctx.ellipse(8 - this.frog.recoil, 0, 26, 22, 0, 0, Math.PI * 2);
+    const headGrad = this.ctx.createRadialGradient(8, -4, 4, 8, 0, 26);
+    headGrad.addColorStop(0, '#76ff03');
+    headGrad.addColorStop(0.6, '#43a047');
+    headGrad.addColorStop(1, '#1b5e20');
+    this.ctx.fillStyle = headGrad;
+    this.ctx.fill();
+    this.ctx.stroke();
+
+    // 4. عيون الضفدع الكرتونية البارزة مع بؤبؤ متتبع
+    [-18, 18].forEach(eyeY => {
+      // مقلة العين
+      this.ctx.beginPath();
+      this.ctx.arc(16 - this.frog.recoil, eyeY, 11, 0, Math.PI * 2);
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.fill();
+      this.ctx.strokeStyle = '#1b5e20';
+      this.ctx.lineWidth = 2;
       this.ctx.stroke();
 
-      // عيون الضفدع
-      this.ctx.fillStyle = '#00e676';
+      // البؤبؤ الأزرق الكبير
       this.ctx.beginPath();
-      this.ctx.arc(18, -20, 10, 0, Math.PI * 2);
-      this.ctx.arc(18, 20, 10, 0, Math.PI * 2);
+      this.ctx.arc(18 - this.frog.recoil, eyeY, 6, 0, Math.PI * 2);
+      this.ctx.fillStyle = '#0288d1';
       this.ctx.fill();
-      this.ctx.fillStyle = '#000';
-      this.ctx.beginPath();
-      this.ctx.arc(20, -20, 5, 0, Math.PI * 2);
-      this.ctx.arc(20, 20, 5, 0, Math.PI * 2);
-      this.ctx.fill();
-    }
 
-    // رسم الكرة المحمولة في الفم والكرة الاحتياطية على الظهر
-    this.drawMarble(this.frog.radius - 8, 0, this.frog.currentMarble, MARBLE_RADIUS - 2);
-    this.drawMarble(-14, 0, this.frog.nextMarble, MARBLE_RADIUS - 5);
+      // بؤبؤ داخلي أسود
+      this.ctx.beginPath();
+      this.ctx.arc(19 - this.frog.recoil, eyeY, 3, 0, Math.PI * 2);
+      this.ctx.fillStyle = '#000000';
+      this.ctx.fill();
+
+      // نقطة بريق العين الأبيض
+      this.ctx.beginPath();
+      this.ctx.arc(16 - this.frog.recoil, eyeY - 2, 2, 0, Math.PI * 2);
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.fill();
+    });
+
+    // 5. فم الضفدع الحاضن للكرة الحالية الجاهزة للإطلاق
+    this.ctx.beginPath();
+    this.ctx.arc(28 - this.frog.recoil + this.frog.tongueOut, 0, 14, 0, Math.PI * 2);
+    this.ctx.fillStyle = '#b71c1c';
+    this.ctx.fill();
+
+    // الكرة الحالية في الفم
+    this.draw3DRollingOrb(
+      28 - this.frog.recoil + this.frog.tongueOut,
+      0,
+      this.frog.currentOrb,
+      this.frog.currentPower,
+      0,
+      ORB_RADIUS
+    );
+
+    // 6. الكرة الاحتياطية التالية على ظهر الضفدع (Next Ball)
+    this.draw3DRollingOrb(
+      -18 - this.frog.recoil,
+      0,
+      this.frog.nextOrb,
+      this.frog.nextPower,
+      0,
+      ORB_RADIUS - 4
+    );
 
     this.ctx.restore();
   }
 
-  drawEffects() {
-    // رسم الجسيمات المتناثرة
+  drawVisualFX() {
+    // رسم الشرارات والجزيئات المتناثرة
     for (let i = 0; i < this.particles.length; i++) {
       const p = this.particles[i];
       this.ctx.save();
       this.ctx.globalAlpha = p.alpha;
       this.ctx.fillStyle = p.color;
       this.ctx.beginPath();
-      this.ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+      this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       this.ctx.fill();
       this.ctx.restore();
     }
 
-    // رسم النصوص العائمة للنقاط
-    for (let i = 0; i < this.floatingTexts.length; i++) {
-      const t = this.floatingTexts[i];
+    // رسم نصوص النقاط والكومبو العائمة
+    for (let i = 0; i < this.popups.length; i++) {
+      const pop = this.popups[i];
       this.ctx.save();
-      this.ctx.globalAlpha = t.alpha;
+      this.ctx.globalAlpha = pop.alpha;
       this.ctx.fillStyle = '#ffeb3b';
-      this.ctx.font = 'bold 16px Tajawal';
+      this.ctx.shadowColor = '#000';
+      this.ctx.shadowBlur = 4;
+      this.ctx.font = '900 17px Tajawal, sans-serif';
       this.ctx.textAlign = 'center';
-      this.ctx.fillText(t.txt, t.x, t.y);
+      this.ctx.fillText(pop.txt, pop.x, pop.y);
       this.ctx.restore();
     }
   }
 
-  startLoop() {
+  startAppLoop() {
     const loop = () => {
       this.update();
       this.draw();
@@ -836,7 +1382,7 @@ class ZumaMobileGame {
   }
 }
 
-// تشغيل اللعبة فور جاهزية المستند
+// بدء التطبيق فور جهوزية الشاشة
 window.addEventListener('DOMContentLoaded', () => {
-  new ZumaMobileGame();
+  new ZumaMasterApp();
 });
