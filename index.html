@@ -3,138 +3,120 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#060d10" />
+  <meta name="theme-color" content="#060c0e" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="manifest.json" />
-  <title>Zuma Mobile: Temple of Marbles</title>
+  <title>Zuma Deluxe Mobile</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@700;900&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div id="app-viewport">
-    <!-- شاشة التحميل الأولية للملفات الخارجية -->
-    <div id="asset-loader-screen">
-      <div class="loader-content">
-        <h2 class="loader-title">جاري تهيئة تطبيق زومبا...</h2>
-        <div class="loader-bar-bg">
-          <div id="loader-bar-fill"></div>
-        </div>
-        <p id="loader-status-text">جاري فحص وتجهيز مكتبات الصور والأصوات...</p>
-      </div>
-    </div>
+  <div id="game-app">
+    <!-- لوحة رسم اللعبة بدقة فائقة -->
+    <canvas id="zumaCanvas"></canvas>
 
-    <!-- لوحة رسم اللعبة -->
-    <canvas id="gameCanvas"></canvas>
-
-    <!-- واجهة المعلومات العلوية HUD -->
-    <header id="hud">
-      <div class="hud-pill score-pill">
-        <span class="hud-lbl">النقاط</span>
-        <span id="score-display" class="hud-num">0</span>
+    <!-- شريط الواجهة العلوية HUD -->
+    <header id="hud-bar">
+      <div class="hud-box">
+        <span class="hud-title">النقاط</span>
+        <span id="txt-score" class="hud-data">0</span>
       </div>
-      <div class="hud-pill level-pill">
-        <span class="hud-lbl">المرحلة</span>
-        <span id="level-display" class="hud-num">1</span>
+      <div class="hud-box">
+        <span class="hud-title">المرحلة</span>
+        <span id="txt-level" class="hud-data">1</span>
       </div>
-      <div class="hud-pill lives-pill">
-        <span class="hud-lbl">المحاولات</span>
-        <div id="lives-container" class="lives-icons">
+      <div class="hud-box">
+        <span class="hud-title">المحاولات</span>
+        <div id="lives-rack" class="lives-display">
           <span>🐸</span><span>🐸</span><span>🐸</span>
         </div>
       </div>
-      <button id="btn-pause" class="btn-hud-icon" aria-label="إيقاف مؤقت">⏸️</button>
+      <div class="hud-actions">
+        <button id="btn-sound-toggle" class="hud-btn" title="كتم/تشغيل الصوت">🔊</button>
+        <button id="btn-pause-game" class="hud-btn" title="إيقاف مؤقت">⏸️</button>
+      </div>
     </header>
 
-    <!-- شريط تقدم المرحلة نحو النهاية -->
-    <div id="progress-container">
-      <div id="progress-fill"></div>
+    <!-- شريط تقدم المرحلة للوصول إلى زوما ZUMA -->
+    <div id="zuma-bar-wrap">
+      <div id="zuma-bar-progress"></div>
+      <span id="zuma-goal-text">ZUMA</span>
     </div>
 
-    <!-- أدوات تحكم شاشة اللمس المخصصة للهاتف -->
-    <div id="touch-controls">
-      <button id="btn-swap-marble" class="action-bubble-btn" title="تبديل الكرة">
-        <span class="icon">🔄</span>
-        <span class="txt">تبديل</span>
+    <!-- أزرار شاشة اللمس المخصصة للهاتف -->
+    <div id="mobile-dock">
+      <button id="btn-swap-ball" class="btn-circular" aria-label="تبديل الكرة">
+        <span class="swap-symbol">🔄</span>
+        <span class="swap-lbl">تبديل</span>
       </button>
     </div>
 
     <!-- نافذة البدء الرئيسية -->
-    <div id="start-modal" class="modal show">
-      <div class="card-dialog">
-        <h1 class="brand-title">ZUMA</h1>
-        <h3 class="brand-sub">أسطورة معبد الكرات السحرية</h3>
+    <div id="modal-start" class="game-modal show">
+      <div class="mayan-card">
+        <h1 class="logo-mayan">ZUMA</h1>
+        <p class="tagline-mayan">أسطورة معبد الكرات السحرية</p>
         
-        <div class="marble-row-preview">
-          <span class="dot-preview ruby"></span>
-          <span class="dot-preview amber"></span>
-          <span class="dot-preview emerald"></span>
-          <span class="dot-preview sapphire"></span>
-          <span class="dot-preview amethyst"></span>
+        <div class="orb-preview-line">
+          <div class="preview-orb red"></div>
+          <div class="preview-orb yellow"></div>
+          <div class="preview-orb green"></div>
+          <div class="preview-orb blue"></div>
+          <div class="preview-orb purple"></div>
         </div>
 
-        <div class="instruction-box">
-          <p>🎯 <b>التوجيه والإطلاق:</b> المس أي نقطة في الشاشة للتصويب وإطلاق الكرة.</p>
-          <p>🔄 <b>تبديل الألوان:</b> اضغط على زر "تبديل" أو اضغط على الضفدع مباشرة.</p>
-          <p>💥 <b>التفجير:</b> اجمع 3 كرات أو أكثر من نفس اللون لمنع وصولها للجمجمة.</p>
-          <p>📱 <b>تطبيق هاتف:</b> يدعم التثبيت المباشر والشاشات السريعة 120Hz.</p>
+        <div class="rules-scroll">
+          <p>🎯 <b>التصويب والإطلاق:</b> اسحب إصبعك للتصويب بالليزر وارفع للإطلاق.</p>
+          <p>🔄 <b>تبديل الكرات:</b> اضغط على زر "تبديل" أو اضغط على الضفدع نفسه.</p>
+          <p>💣 <b>كرات القوة:</b> فجّر كرات القنبلة، الإبطاء، والرجوع للوراء.</p>
+          <p>🪙 <b>العملات الذهبية:</b> اصطد عملات الشمس من بين الثغرات لمضاعفة النقاط.</p>
+          <p>💀 <b>الهدف:</b> دمر السلسلة قبل وصولها إلى فم الجمجمة الذهبية!</p>
         </div>
 
-        <button id="btn-start-game" class="btn-main-action">ابدأ المغامرة الآن 🎮</button>
+        <button id="btn-play-now" class="btn-gold-action">ابدأ المغامرة 🔥</button>
       </div>
     </div>
 
     <!-- نافذة الفوز بالمرحلة -->
-    <div id="victory-modal" class="modal hidden">
-      <div class="card-dialog">
-        <h2 class="title-win">🎉 اكتملت المرحلة بنجاح!</h2>
-        <p class="summary-text">تم تدمير جميع الكرات السحرية بنجاح.</p>
-        <div class="score-summary">
-          <span>النقاط الكلية:</span>
-          <b id="victory-score">0</b>
+    <div id="modal-win" class="game-modal hidden">
+      <div class="mayan-card victory-glow">
+        <h2 class="head-gold">✨ اكتملت المرحلة بنجاح! ✨</h2>
+        <p class="desc-text">لقد أوقفت لعنة المعبد وطهرت المسار!</p>
+        <div class="score-banner">
+          <span>مجموع النقاط:</span>
+          <strong id="win-score-txt">0</strong>
         </div>
-        <button id="btn-next-stage" class="btn-main-action">المرحلة التالية ⏩</button>
+        <button id="btn-next-stage" class="btn-gold-action">المرحلة التالية ⏩</button>
       </div>
     </div>
 
-    <!-- نافذة انتهاء المحاولات (Game Over) -->
-    <div id="gameover-modal" class="modal hidden">
-      <div class="card-dialog danger-theme">
-        <h2 class="title-loss">💀 ابتلعت الجمجمة الكرات!</h2>
-        <p class="summary-text">لقد استنفدت المحاولات، حظاً أوفر في المرة القادمة.</p>
-        <div class="score-summary">
+    <!-- نافذة الخسارة (انتهت المحاولات) -->
+    <div id="modal-gameover" class="game-modal hidden">
+      <div class="mayan-card skull-glow">
+        <h2 class="head-danger">💀 ابتلعت الجمجمة كراتك!</h2>
+        <p class="desc-text">انتهت المحاولات ولكن روح المحارب لا تستسلم.</p>
+        <div class="score-banner">
           <span>النقاط النهائية:</span>
-          <b id="gameover-score">0</b>
+          <strong id="over-score-txt">0</strong>
         </div>
-        <button id="btn-restart-game" class="btn-main-action">إعادة المحاولة 🔄</button>
+        <button id="btn-retry-all" class="btn-gold-action">إعادة المحاولة من جديد 🔄</button>
       </div>
     </div>
 
     <!-- نافذة الإيقاف المؤقت -->
-    <div id="pause-modal" class="modal hidden">
-      <div class="card-dialog">
-        <h2>اللعبة متوقفة مؤقتاً</h2>
-        <button id="btn-resume-game" class="btn-main-action">متابعة اللعب ▶️</button>
-        <button id="btn-replay-level" class="btn-secondary-action">إعادة المرحلة 🔄</button>
+    <div id="modal-pause" class="game-modal hidden">
+      <div class="mayan-card">
+        <h2 class="head-gold">اللعبة متوقفة</h2>
+        <button id="btn-continue-game" class="btn-gold-action">استئناف اللعب ▶️</button>
+        <button id="btn-restart-current" class="btn-sub-action">إعادة المرحلة 🔄</button>
       </div>
     </div>
   </div>
 
-  <!-- تحميل ملف إعدادات الوسائط الخارجية أولاً ثم المحرك -->
-  <script src="assets-config.js"></script>
   <script src="game.js"></script>
-  <script>
-    // تسجيل Service Worker لتفعيل التثبيت الكامل كتطبيق أندرويد
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch((err) => {
-          console.log('SW registration note:', err);
-        });
-      });
-    }
-  </script>
 </body>
 </html>
